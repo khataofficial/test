@@ -742,15 +742,25 @@
   const dl = () => { const d = DLS[OS]; return { os: OS, url: d ? d[0] : 'https://ollama.com/download', label: d ? d[1] : 'Download Ollama' }; };
   const safeOrigin = () => /^https?:\/\/[A-Za-z0-9.:\-]+$/.test(location.origin) ? location.origin : '';
   const BASE_MODEL = 'qwen2.5:3b';
-  function setupScript() {                       // Windows .bat: allow this website, restart Ollama, download the model
-    const o = safeOrigin(), ex = '%LOCALAPPDATA%\\Programs\\Ollama\\';
-    return ['@echo off', 'echo Khata AI setup',
-      'if not exist "' + ex + 'ollama.exe" (echo Install Ollama first, then run this file again. & pause & exit /b)',
-      o ? 'setx OLLAMA_ORIGINS "' + o + '" >nul' : 'rem no web address found', o ? 'set OLLAMA_ORIGINS=' + o : 'rem',
+  function setupScript() {                       // Windows .bat: install Ollama (if missing), allow this website, restart, download model
+    const o = safeOrigin();
+    return ['@echo off', 'echo ===== Khata AI setup =====',
+      'set "OL=%LOCALAPPDATA%\\Programs\\Ollama"',
+      'if exist "%OL%\\ollama.exe" goto have',
+      'echo Downloading Ollama, please wait...',
+      'curl -L -o "%TEMP%\\OllamaSetup.exe" https://ollama.com/download/OllamaSetup.exe',
+      'if errorlevel 1 goto fail',
+      'echo Installing Ollama...',
+      '"%TEMP%\\OllamaSetup.exe" /SILENT',
+      'if not exist "%OL%\\ollama.exe" goto fail',
+      ':have',
+      o ? 'setx OLLAMA_ORIGINS "' + o + '" >nul' : 'rem no web address found',
+      o ? 'set OLLAMA_ORIGINS=' + o : 'rem',
       'taskkill /f /im "ollama app.exe" >nul 2>&1', 'taskkill /f /im ollama.exe >nul 2>&1', 'timeout /t 2 >nul',
-      'start "" "' + ex + 'ollama app.exe"', 'timeout /t 6 >nul',
-      'echo Downloading the AI model (one time, about 2 GB)...', '"' + ex + 'ollama.exe" pull ' + BASE_MODEL,
-      'echo.', 'echo Done. Go back to My Khata. It connects by itself.', 'pause'].join('\r\n');
+      'start "" "%OL%\\ollama app.exe"', 'timeout /t 6 >nul',
+      'echo Downloading the AI model (one time, about 2 GB)...', '"%OL%\\ollama.exe" pull ' + BASE_MODEL,
+      'echo.', 'echo Done. Go back to My Khata. It connects by itself.', 'pause', 'exit /b',
+      ':fail', 'echo Could not install Ollama automatically. Install it from https://ollama.com/download then run this file again.', 'pause'].join('\r\n');
   }
   function saveSetup() {
     const b = new Blob([setupScript()], { type: 'application/octet-stream' }), l = document.createElement('a');
@@ -769,6 +779,7 @@
     const p = names.find(n => /^khata-ai/.test(n)) || names.find(n => /qwen2\.5|llama3\.[12]/.test(n)) || names[0];
     setCfg({ model: p }); return p;
   }
+  const win0 = () => OS === 'win';
   let pollT = 0;
   function ollamaCard(w) {                       // shown in the chat when Ollama is missing / not running
     const box = el('div'); box.style.cssText = 'margin:14px auto 0;display:flex;flex-direction:column;gap:8px;align-items:center;max-width:320px';
@@ -776,8 +787,8 @@
     const btns = el('div'); btns.style.cssText = 'display:none;flex-direction:column;gap:8px;width:100%';
     const d = dl();
     if (!isMobile) {
-      const a = el('a', 'kai-btn'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '⬇ ' + d.label; a.style.cssText = 'display:block;text-align:center;text-decoration:none;padding:12px 20px'; btns.appendChild(a);
-      if (OS === 'win') { const b = el('button', 'kai-btn'); b.textContent = '⚙ Download setup file (.bat)'; b.style.padding = '12px 20px'; b.onclick = saveSetup; btns.appendChild(b); }
+      if (OS === 'win') { const b = el('button', 'kai-btn'); b.textContent = '⚡ Auto setup (1 file, does everything)'; b.style.padding = '12px 20px'; b.onclick = saveSetup; btns.appendChild(b); }
+      const a = el('a', win0() ? '' : 'kai-btn'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = (win0() ? 'or ' : '⬇ ') + d.label + (win0() ? ' only' : ''); a.style.cssText = win0() ? 'font-size:12px;opacity:.7;text-align:center' : 'display:block;text-align:center;text-decoration:none;padding:12px 20px'; btns.appendChild(a);
     }
     const rt = el('button', 'kai-btn'); rt.textContent = '↻ Check again'; rt.style.padding = '12px 20px'; btns.appendChild(rt);
     box.appendChild(msg); box.appendChild(btns); w.appendChild(box);
